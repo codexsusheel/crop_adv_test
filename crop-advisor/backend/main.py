@@ -1,5 +1,6 @@
 """Crop Advisor API: the supplied notebook model plus transparent planning tools."""
 import json
+from datetime import date
 from pathlib import Path
 import joblib
 import numpy as np
@@ -20,6 +21,15 @@ train, _ = train_test_split(data, test_size=0.2, random_state=42, stratify=data.
 FEATURES = meta['features']
 SCALE = train[FEATURES].std()
 app = FastAPI(title='Crop Advisor', version='1.0.0')
+
+@app.middleware('http')
+async def refresh_frontend(request, call_next):
+    response = await call_next(request)
+    # Embedded VS Code browsers can retain an old app.js between server restarts.
+    # Keep local UI documents/assets fresh; model plots can still use caching.
+    if request.url.path in ('/', '/index.html', '/app.js', '/style.css'):
+        response.headers['Cache-Control'] = 'no-store, max-age=0'
+    return response
 
 class StrictModel(BaseModel):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
@@ -171,9 +181,9 @@ def sweep(body: Sweep):
     return {'points': rows, 'tipping_intervals': [[a['value'], b['value']] for a,b in zip(rows, rows[1:]) if a['recommendation']!=b['recommendation']]}
 
 @app.get('/market/{crop}')
-async def market(crop: str, state: str = Query(min_length=2, max_length=80), commodity: str | None = Query(default=None, max_length=80), district: str | None = Query(default=None, max_length=80)):
+async def market(crop: str, state: str = Query(min_length=2, max_length=80), commodity: str | None = Query(default=None, max_length=80), district: str = Query(min_length=2, max_length=80), arrival_date: date | None = Query(default=None, alias='date')):
     check_crop(crop)
-    return await prices(crop, state, commodity, district)
+    return await prices(crop, state, commodity, district, arrival_date)
 
 class Profit(StrictModel):
     area_ha: float = Field(gt=0)

@@ -3,6 +3,9 @@ const $ = id => document.getElementById(id);
 const fields = ['N','P','K','temperature','humidity','ph','rainfall'];
 const labels = {N:'Nitrogen · CSV scale',P:'Phosphorus · CSV scale',K:'Potassium · CSV scale',temperature:'Temperature (°C)',humidity:'Humidity (%)',ph:'Soil pH',rainfall:'Rainfall · CSV scale'};
 const sample = [90,42,43,20.9,82,6.5,203];
+// Use the user's local calendar date, avoiding UTC shifting it to the prior day.
+const today = new Date();
+$('market-form').elements.date.value = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
 function node(tag, text, className) { const el=document.createElement(tag); if(text!==undefined) el.textContent=text; if(className) el.className=className; return el; }
 function inputField(container, name, label, value='', options=null) {
   const wrap=node('label',label); const input=document.createElement(options?'select':'input');
@@ -20,8 +23,11 @@ async function api(path, body) {
   if(!response.ok) throw Error(typeof data.detail==='string'?data.detail:JSON.stringify(data.detail));return data;
 }
 async function task(target, action) {
-  target.replaceChildren(node('p','Working…'));
+  const marketButton = target.id==='market-result' ? $('market-form').querySelector('button') : null;
+  if(marketButton){marketButton.disabled=true;marketButton.textContent='Checking government records…';}
+  target.replaceChildren(node('p',marketButton?'Contacting data.gov.in… This may take up to about a minute.':'Working…'));
   try {await action();} catch(error){target.replaceChildren(node('p',error.message,'error'));}
+  finally {if(marketButton){marketButton.disabled=false;marketButton.textContent='Find prices';}}
 }
 function table(headers, rows) {const wrap=node('div',undefined,'table-wrap');const t=node('table');const head=node('tr');headers.forEach(h=>head.append(node('th',h)));t.append(head);rows.forEach(row=>{const tr=node('tr');row.forEach(v=>tr.append(node('td',v)));t.append(tr);});wrap.append(t);return wrap;}
 function pretty(value){return typeof value==='number'?Number(value.toFixed(4)).toLocaleString():value===null?'Not available':String(value);}

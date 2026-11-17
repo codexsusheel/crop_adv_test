@@ -81,7 +81,7 @@ class ApiTests(unittest.TestCase):
 
     def test_market_without_key(self):
         with patch.dict(os.environ, {}, clear=True):
-            r=client.get('/market/rice?state=Punjab').json()
+            r=client.get('/market/rice?state=Punjab&district=Amritsar').json()
         self.assertEqual(r['status'],'unavailable')
         self.assertEqual(r['records'],[])
 

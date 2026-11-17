@@ -51,11 +51,13 @@ Rebuilding takes several minutes because it repeats the notebook's full cross-va
 
 ## Selected government API
 
-Official resource: https://www.data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi
+Official resource: https://www.data.gov.in/resource/variety-wise-daily-market-prices-data-commodity
 
-Endpoint: `https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070`
+Endpoint: `https://api.data.gov.in/resource/35985678-0d79-46b4-9ed6-6f13308a1d24`
 
-Parameters: `api-key`, `format=json`, `filters[state]`, `filters[commodity]`, optional `filters[district]`, `limit=100`, `offset=0`.
+Parameters: `api-key`, `format=json`, `filters[State]`, `filters[Commodity]`, `filters[District]`, `filters[Arrival_Date]` (dd-MM-yyyy), `limit=100`, `offset=0`. Capitalization matters for this resource. State and district are required by our endpoint; date defaults to today's India calendar date. The UI exposes a date picker. Local endpoint example: `/market/apple?state=Telangana&district=Hyderabad&date=2026-11-16`.
+
+The supplied government HTTP 200 response contains capitalized record fields and historical 2009 rows when unfiltered. The adapter normalizes field names to lowercase and only accepts the requested date and location; an old quote cannot silently become today's price. Cache keys include reporting date. A new authenticated filtered request timed out during development; provider-side date filtering remains unverified live. Offline tests verify the expected filter parameters and reject wrong-date records.
 
 This AGMARKNET/DMI resource supplies state, district, market, commodity, variety, reporting date and minimum/modal/maximum wholesale prices. Register at data.gov.in to obtain your own key. The key stays in a server environment variable. Never put it in frontend JavaScript or commit it.
 
@@ -103,7 +105,7 @@ The guide's 12-class dataset, seven-classifier requirement and 72% results belon
 
 Every endpoint and validation rule is available in `/docs` and `/openapi.json`. Import `/openapi.json` into Postman as a collection/API definition, set the base URL to `http://127.0.0.1:8000`, and use the examples above. The automated tests use FastAPI's TestClient; no claim is made that Postman itself was run.
 
-GET routes: `/meta`, `/states`, `/crops`, `/crops/{crop}`, `/market/{crop}?state=Punjab`, `/metrics`, `/metrics/classwise`, `/metrics/confusion-matrix`, `/metrics/robustness`, `/metrics/decision-rules`, `/plots/*.png`.
+GET routes: `/meta`, `/states`, `/crops`, `/crops/{crop}`, `/market/{crop}?state=Punjab&district=Amritsar`, `/metrics`, `/metrics/classwise`, `/metrics/confusion-matrix`, `/metrics/robustness`, `/metrics/decision-rules`, `/plots/*.png`.
 
 POST routes: `/predict`, `/land-check`, `/what-if`, `/what-if/sweep`, `/profit`, `/fertilizer`, `/rotation`.
 
