@@ -1,0 +1,112 @@
+{
+  "model_name": "Random Forest (300 trees) + isotonic calibration",
+  "features": [
+    "N",
+    "P",
+    "K",
+    "temperature",
+    "humidity",
+    "ph",
+    "rainfall"
+  ],
+  "classes": [
+    "apple",
+    "banana",
+    "blackgram",
+    "chickpea",
+    "coconut",
+    "coffee",
+    "cotton",
+    "grapes",
+    "jute",
+    "kidneybeans",
+    "lentil",
+    "maize",
+    "mango",
+    "mothbeans",
+    "mungbean",
+    "muskmelon",
+    "orange",
+    "papaya",
+    "pigeonpeas",
+    "pomegranate",
+    "rice",
+    "watermelon"
+  ],
+  "training_ranges": {
+    "N": {
+      "min": 0.0,
+      "max": 140.0
+    },
+    "P": {
+      "min": 5.0,
+      "max": 145.0
+    },
+    "K": {
+      "min": 5.0,
+      "max": 205.0
+    },
+    "temperature": {
+      "min": 8.825674745,
+      "max": 43.67549305
+    },
+    "humidity": {
+      "min": 14.25803981,
+      "max": 99.98187601
+    },
+    "ph": {
+      "min": 3.504752314,
+      "max": 9.93509073
+    },
+    "rainfall": {
+      "min": 20.21126747,
+      "max": 298.5601175
+    }
+  },
+  "physical_bounds": {
+    "N": [
+      0,
+      null
+    ],
+    "P": [
+      0,
+      null
+    ],
+    "K": [
+      0,
+      null
+    ],
+    "temperature": [
+      -10,
+      60
+    ],
+    "humidity": [
+      0,
+      100
+    ],
+    "ph": [
+      0,
+      14
+    ],
+    "rainfall": [
+      0,
+      null
+    ]
+  },
+  "thresholds": {
+    "low_confidence": 0.75,
+    "unusual_input": "per-crop squared Mahalanobis, 98th percentile of held-out distances"
+  },
+  "training": {
+    "n_train": 1760,
+    "n_test": 440,
+    "random_state": 42,
+    "test_accuracy": 0.9909,
+    "test_macro_f1": 0.9909
+  },
+  "versions": {
+    "sklearn": "1.7.2",
+    "numpy": "2.3.5",
+    "pandas": "2.3.3"
+  }
+}
