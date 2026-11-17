@@ -9,6 +9,28 @@ client = TestClient(app)
 SOIL = dict(N=90, P=42, K=43, temperature=20.9, humidity=82, ph=6.5, rainfall=203)
 
 class ApiTests(unittest.TestCase):
+    def test_regional_fertilizer_reference_scoping(self):
+        self.assertEqual(client.get('/fertilizer/references').status_code,200)
+        body={'crop':'rice','inputs':SOIL,'state':'Tamil Nadu','reference_profile':'tn_rice_short_other'}
+        result=client.post('/fertilizer',json=body).json()['regional_reference']
+        self.assertEqual(result['status'],'confirmation_needed')
+        self.assertNotIn('nutrients_kg_ha',result)
+        result=client.post('/fertilizer',json={**body,'measurement_basis':'confirmed_available_kg_ha','conditions_confirmed':True}).json()['regional_reference']
+        self.assertEqual(result['nutrients_kg_ha'],{'N':120,'P2O5':40,'K2O':40})
+        self.assertEqual(result['status'],'reference_only')
+        self.assertEqual(client.post('/fertilizer',json={**body,'state':'Telangana'}).status_code,422)
+        self.assertEqual(client.post('/fertilizer',json={**body,'crop':'cotton'}).status_code,422)
+
+    @unittest.skipUnless(os.getenv('RUN_MONGO_INTEGRATION')=='1','Needs local imported market data')
+    def test_market_browser_routes_are_not_classifier_limited(self):
+        for path in ('/market/options','/market/status','/market/imports'):
+            self.assertEqual(client.get(path).status_code,200,path)
+        options=client.get('/market/options',params={'state':'Telangana','district':'Siddipet'}).json()
+        self.assertIn('Tomato',options['commodities'])
+        result=client.get('/market/prices',params={'state':'Telangana','district':'Siddipet','commodity':'Tomato'}).json()
+        self.assertEqual(result['status'],'stored')
+        self.assertTrue(result['records'])
+        self.assertEqual(client.get('/market/prices',params={'state':'Telangana','district':'Siddipet','commodity':'Tomato','date':'bad'}).status_code,422)
     def test_typical_input_and_repeatability(self):
         a = client.post('/predict', json=SOIL)
         self.assertEqual(a.status_code, 200)
@@ -79,11 +101,21 @@ class ApiTests(unittest.TestCase):
         self.assertGreater(len([c for c in result['forest_candidates'] if c['score']>0]),1)
         self.assertIsNone(client.post('/predict',json={**SOIL,'rainfall':350}).json()['forest_candidates'])
 
-    def test_market_without_key(self):
-        with patch.dict(os.environ, {}, clear=True):
-            r=client.get('/market/rice?state=Punjab&district=Amritsar').json()
-        self.assertEqual(r['status'],'unavailable')
+    def test_market_reads_store_without_credentials(self):
+        with patch('backend.market_routes.store.lookup',return_value={'status':'no_data','records':[]}) as lookup:
+            response=client.get('/market/prices?state=Punjab&district=Amritsar&commodity=Rice')
+        self.assertEqual(response.status_code,200)
+        r=response.json()
+        self.assertEqual(r['status'],'no_data')
         self.assertEqual(r['records'],[])
+        lookup.assert_called_once()
+
+    def test_outbound_market_integration_removed(self):
+        from pathlib import Path
+        root=Path(__file__).resolve().parents[1]
+        for path in ('backend/market.py','scripts/sync_market_data.py','scripts/check_government_api.py'):
+            self.assertFalse((root/path).exists())
+        self.assertNotIn('/market/{crop}',client.get('/openapi.json').json()['paths'])
 
     def test_rotation(self):
         r=client.post('/rotation',json={'previous_crop':'rice'}).json()

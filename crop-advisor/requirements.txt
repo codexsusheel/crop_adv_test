@@ -1,5 +1,6 @@
 fastapi==0.162.0
 uvicorn==0.54.0
+# Used only by FastAPI TestClient; application market lookups use MongoDB.
 httpx==0.28.1
 scikit-learn==1.7.2
 numpy==2.3.5
@@ -8,3 +9,4 @@ joblib==1.5.2
 matplotlib
 seaborn
 ipython
+pymongo>=4.10,<5

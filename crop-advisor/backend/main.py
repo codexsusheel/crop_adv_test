@@ -1,15 +1,13 @@
 """Crop Advisor API: the supplied notebook model plus transparent planning tools."""
 import json
-from datetime import date
 from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from sklearn.model_selection import train_test_split
-from .market import prices
 from .notebook_policy import assess_input
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -27,7 +25,7 @@ async def refresh_frontend(request, call_next):
     response = await call_next(request)
     # Embedded VS Code browsers can retain an old app.js between server restarts.
     # Keep local UI documents/assets fresh; model plots can still use caching.
-    if request.url.path in ('/', '/index.html', '/app.js', '/style.css'):
+    if request.url.path in ('/', '/index.html', '/app.js', '/market-ui.js', '/style.css'):
         response.headers['Cache-Control'] = 'no-store, max-age=0'
     return response
 
@@ -105,7 +103,7 @@ def metadata():
 
 @app.get('/states')
 def states():
-    return {'states': [], 'message': 'No state labels in training CSV. Enter a state name for the market API only; no state-wise suitability is claimed.'}
+    return {'states': [], 'message': 'No state labels in training CSV. Market browsing uses states from MongoDB; no state-wise model suitability is claimed.'}
 
 @app.get('/crops')
 def crops():
@@ -180,10 +178,8 @@ def sweep(body: Sweep):
         rows.append({'value': float(value), 'status': result['status'], 'recommendation': result['recommendation'], 'confidence': result['confidence']})
     return {'points': rows, 'tipping_intervals': [[a['value'], b['value']] for a,b in zip(rows, rows[1:]) if a['recommendation']!=b['recommendation']]}
 
-@app.get('/market/{crop}')
-async def market(crop: str, state: str = Query(min_length=2, max_length=80), commodity: str | None = Query(default=None, max_length=80), district: str = Query(min_length=2, max_length=80), arrival_date: date | None = Query(default=None, alias='date')):
-    check_crop(crop)
-    return await prices(crop, state, commodity, district, arrival_date)
+from .market_routes import router as market_router
+app.include_router(market_router)
 
 class Profit(StrictModel):
     area_ha: float = Field(gt=0)
@@ -210,12 +206,26 @@ class Fertilizer(StrictModel):
     crop: str
     inputs: Soil
     measurement_basis: str = 'csv_scale'
+    state: str = Field(default='',max_length=100)
+    reference_profile: str | None = None
+    conditions_confirmed: bool = False
+
+@app.get('/fertilizer/references')
+def fertilizer_references():
+    from .fertilizer_references import PROFILES
+    return {'profiles':[{k:v for k,v in p.items() if k not in ('nutrients_kg_ha','schedule')} for p in PROFILES],
+            'note':'References cover specified Tamil Nadu rice/cotton conditions only. Other crops/regions retain soil screening.'}
 
 @app.post('/fertilizer')
 def fertilizer(body: Fertilizer):
+    from .fertilizer_references import reference_for
     check_crop(body.crop)
     if body.measurement_basis not in ('csv_scale', 'confirmed_available_kg_ha'):
         raise HTTPException(422, 'Choose csv_scale or confirmed_available_kg_ha')
+    try:
+        regional_reference=reference_for(body.crop,body.state,body.reference_profile,body.measurement_basis,body.conditions_confirmed)
+    except ValueError as error:
+        raise HTTPException(422,str(error)) from None
     rows = train[train.label == body.crop]
     products = {'N': 'Urea (nitrogen source)', 'P': 'Single superphosphate / SSP (phosphorus source)',
                 'K': 'Muriate of potash / MOP (potassium source)'}
@@ -243,7 +253,7 @@ def fertilizer(body: Fertilizer):
         warnings.append('High pH can restrict nutrient availability. Test alkalinity/sodicity before choosing amendments.')
     return {'crop': body.crop, 'measurement_basis': body.measurement_basis,
         'reference_label': 'TNAU available elemental N/P/K soil ratings (kg/ha)' if body.measurement_basis=='confirmed_available_kg_ha' else 'Selected crop training-sample 10th–90th percentiles (CSV scale)',
-        'nutrients': nutrients, 'ph': ph, 'warnings': warnings,
+        'nutrients': nutrients, 'ph': ph, 'warnings': warnings, 'regional_reference': regional_reference,
         'source_url': 'https://agritech.tnau.ac.in/agriculture/agri_soil_soilratingchart.html' if body.measurement_basis=='confirmed_available_kg_ha' else None,
         'note': 'Suggestions identify nutrient sources, not an application dose. CSV comparisons are not laboratory deficiency diagnoses. Do not subtract soil readings from reference values to calculate fertilizer quantities.'}
 
